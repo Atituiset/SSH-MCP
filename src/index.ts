@@ -20,12 +20,27 @@ import { addUbuntuTools, ubuntuToolHandlers } from "./ubuntu-website-tools.js";
 // Load environment variables from .env file if present
 dotenv.config();
 
+interface SSHPreset {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  privateKeyPath?: string;
+  passphrase?: string;
+}
+
+interface HostsConfig {
+  presets: Record<string, SSHPreset>;
+}
+
 class SSHMCPServer {
   private server: Server;
   private connections: Map<string, { conn: Client; config: any }>;
+  private presets: Map<string, SSHPreset>;
 
   constructor() {
     this.connections = new Map();
+    this.presets = new Map();
     this.server = new Server(
       {
         name: "MCP SSH Server",
@@ -167,6 +182,55 @@ class SSHMCPServer {
                 },
                 required: ["connectionId"]
               }
+            },
+            ssh_list_presets: {
+              description: "List all pre-configured SSH hosts",
+              inputSchema: {
+                type: "object",
+                properties: {},
+                required: []
+              }
+            },
+            ssh_connect_preset: {
+              description: "Connect to a remote server using a pre-configured host preset",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  preset: {
+                    type: "string",
+                    description: "Name of the preset to use"
+                  },
+                  host: {
+                    type: "string",
+                    description: "Override the preset hostname or IP"
+                  },
+                  port: {
+                    type: "number",
+                    description: "Override the SSH port"
+                  },
+                  username: {
+                    type: "string",
+                    description: "Override the SSH username"
+                  },
+                  password: {
+                    type: "string",
+                    description: "Override or provide password authentication"
+                  },
+                  privateKeyPath: {
+                    type: "string",
+                    description: "Override or provide private key path"
+                  },
+                  passphrase: {
+                    type: "string",
+                    description: "Override or provide private key passphrase"
+                  },
+                  connectionId: {
+                    type: "string",
+                    description: "Unique identifier for this connection"
+                  }
+                },
+                required: ["preset"]
+              }
             }
           }
         }
@@ -174,9 +238,12 @@ class SSHMCPServer {
     );
 
     this.setupHandlers();
-    
+
     // Add Ubuntu website management tools
     addUbuntuTools(this.server, this.connections);
+
+    // Load preset host configurations
+    this.loadPresets();
   }
 
   private setupHandlers() {
@@ -262,6 +329,33 @@ class SSHMCPServer {
             },
             required: ['connectionId']
           }
+        },
+        {
+          name: 'ssh_list_presets',
+          description: 'List all pre-configured SSH hosts',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: []
+          }
+        },
+        {
+          name: 'ssh_connect_preset',
+          description: 'Connect to a remote server using a pre-configured host preset',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              preset: { type: 'string', description: 'Name of the preset to use' },
+              host: { type: 'string', description: 'Override the preset hostname or IP' },
+              port: { type: 'number', description: 'Override the SSH port' },
+              username: { type: 'string', description: 'Override the SSH username' },
+              password: { type: 'string', description: 'Override or provide password authentication' },
+              privateKeyPath: { type: 'string', description: 'Override or provide private key path' },
+              passphrase: { type: 'string', description: 'Override or provide private key passphrase' },
+              connectionId: { type: 'string', description: 'Unique identifier for this connection' }
+            },
+            required: ['preset']
+          }
         }
       ]
     }));
@@ -285,6 +379,10 @@ class SSHMCPServer {
             return this.handleSSHListFiles(request.params.arguments);
           case 'ssh_disconnect':
             return this.handleSSHDisconnect(request.params.arguments);
+          case 'ssh_list_presets':
+            return this.handleSSHListPresets(request.params.arguments);
+          case 'ssh_connect_preset':
+            return this.handleSSHConnectPreset(request.params.arguments);
           default:
             throw new Error(`Unknown SSH tool: ${toolName}`);
         }
@@ -297,6 +395,56 @@ class SSHMCPServer {
       
       throw new Error(`Unknown tool: ${toolName}`);
     });
+  }
+
+  /**
+   * Load preset host configurations from hosts.json or SSH_MCP_HOSTS_CONFIG env var.
+   */
+  private loadPresets(): void {
+    const configPath = process.env.SSH_MCP_HOSTS_CONFIG
+      ? path.resolve(process.env.SSH_MCP_HOSTS_CONFIG)
+      : path.join(process.cwd(), 'hosts.json');
+
+    if (!fs.existsSync(configPath)) {
+      console.error(`No hosts config found at ${configPath}. Preset tools will be unavailable.`);
+      return;
+    }
+
+    try {
+      const raw = fs.readFileSync(configPath, 'utf-8');
+      const parsed: HostsConfig = JSON.parse(raw);
+
+      if (!parsed.presets || typeof parsed.presets !== 'object') {
+        console.error('Invalid hosts.json: missing "presets" object');
+        return;
+      }
+
+      for (const [name, preset] of Object.entries(parsed.presets)) {
+        if (!preset.host || !preset.username) {
+          console.error(`Skipping preset "${name}": missing host or username`);
+          continue;
+        }
+
+        if (!preset.password && !preset.privateKeyPath) {
+          console.error(`Skipping preset "${name}": no password or privateKeyPath`);
+          continue;
+        }
+
+        if (preset.privateKeyPath) {
+          preset.privateKeyPath = preset.privateKeyPath.replace(/^~/, os.homedir());
+        }
+
+        if (!preset.port) {
+          preset.port = 22;
+        }
+
+        this.presets.set(name, preset);
+      }
+
+      console.error(`Loaded ${this.presets.size} SSH preset(s) from ${configPath}`);
+    } catch (err: any) {
+      console.error(`Failed to load presets: ${err.message}`);
+    }
   }
 
   /**
@@ -684,7 +832,7 @@ class SSHMCPServer {
 
   private async handleSSHDisconnect(params: any) {
     const { connectionId } = params;
-    
+
     // Check if the connection exists
     if (!this.connections.has(connectionId)) {
       return {
@@ -692,14 +840,14 @@ class SSHMCPServer {
         isError: true
       };
     }
-    
+
     const { conn, config } = this.connections.get(connectionId)!;
-    
+
     try {
       // Close the connection
       conn.end();
       this.connections.delete(connectionId);
-      
+
       return {
         content: [{ type: "text", text: `Disconnected from ${config.username}@${config.host}:${config.port}` }]
       };
@@ -709,6 +857,62 @@ class SSHMCPServer {
         isError: true
       };
     }
+  }
+
+  private async handleSSHListPresets(_params: any) {
+    if (this.presets.size === 0) {
+      return {
+        content: [{ type: "text", text: "No SSH presets configured. Create a hosts.json file or set SSH_MCP_HOSTS_CONFIG." }],
+        isError: false
+      };
+    }
+
+    const list = Array.from(this.presets.entries()).map(([name, preset]) => ({
+      name,
+      host: preset.host,
+      port: preset.port,
+      username: preset.username,
+      authType: preset.privateKeyPath ? 'key' : 'password'
+    }));
+
+    return {
+      content: [{
+        type: "text",
+        text: `Configured SSH presets:\n\n${JSON.stringify(list, null, 2)}`
+      }]
+    };
+  }
+
+  private async handleSSHConnectPreset(params: any) {
+    const { preset: presetName, connectionId, ...overrides } = params;
+
+    if (!this.presets.has(presetName)) {
+      return {
+        content: [{ type: "text", text: `Unknown preset: "${presetName}". Use ssh_list_presets to see available presets.` }],
+        isError: true
+      };
+    }
+
+    const preset = this.presets.get(presetName)!;
+
+    const merged = {
+      host: overrides.host ?? preset.host,
+      port: overrides.port ?? preset.port,
+      username: overrides.username ?? preset.username,
+      password: overrides.password ?? preset.password,
+      privateKeyPath: overrides.privateKeyPath ?? preset.privateKeyPath,
+      passphrase: overrides.passphrase ?? preset.passphrase,
+      connectionId
+    };
+
+    if (!merged.password && !merged.privateKeyPath) {
+      return {
+        content: [{ type: "text", text: `Preset "${presetName}" has no authentication method configured, and none was provided as an override. Please provide password or privateKeyPath.` }],
+        isError: true
+      };
+    }
+
+    return this.handleSSHConnect(merged);
   }
 
   async start() {

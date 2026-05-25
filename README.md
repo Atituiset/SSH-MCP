@@ -106,6 +106,57 @@ Create or edit `.vscode/mcp.json` in your workspace:
 }
 ```
 
+### Preset Host Configuration
+
+You can pre-configure commonly used SSH hosts in a `hosts.json` file, allowing AI to connect by name without typing full connection details every time.
+
+1. Create `hosts.json` in the project root (next to `package.json`):
+
+```json
+{
+  "presets": {
+    "prod-web": {
+      "host": "203.0.113.10",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKeyPath": "~/.ssh/id_rsa"
+    },
+    "switch-core": {
+      "host": "192.168.1.1",
+      "port": 22,
+      "username": "admin",
+      "password": "your-password"
+    }
+  }
+}
+```
+
+**Fields:**
+- `host` (required) - Hostname or IP address
+- `username` (required) - SSH username
+- `port` (optional) - SSH port, defaults to 22
+- `privateKeyPath` (optional) - Path to private key file for key-based auth
+- `passphrase` (optional) - Passphrase for the private key
+- `password` (optional) - Password for password-based auth
+
+**Note:** Either `privateKeyPath` or `password` must be provided for each preset.
+
+**Custom config path:** Set the `SSH_MCP_HOSTS_CONFIG` environment variable to use a different file:
+
+```json
+{
+  "mcpServers": {
+    "ssh-server": {
+      "command": "node",
+      "args": ["/path/to/mcp-ssh-server/build/index.js"],
+      "env": {
+        "SSH_MCP_HOSTS_CONFIG": "/path/to/my-hosts.json"
+      }
+    }
+  }
+}
+```
+
 ## Available Tools
 
 ### Core SSH Tools
@@ -199,6 +250,45 @@ Close an SSH connection.
 **Returns:**
 - `success` - Boolean indicating success
 - `message` - Disconnection status message
+
+### ssh_list_presets
+List all pre-configured SSH hosts from `hosts.json`.
+
+**Parameters:** None
+
+**Returns:**
+- Array of preset objects with `name`, `host`, `port`, `username`, and `authType` (`key` or `password`)
+- Passwords and key paths are **not** exposed for security
+
+**Example:**
+```
+Show me all configured SSH presets
+```
+
+### ssh_connect_preset
+Connect to a remote server using a pre-configured host preset.
+
+**Parameters:**
+- `preset` (required) - Name of the preset to use
+- `host` (optional) - Override the preset hostname or IP
+- `port` (optional) - Override the SSH port
+- `username` (optional) - Override the SSH username
+- `password` (optional) - Override or provide password authentication
+- `privateKeyPath` (optional) - Override or provide private key path
+- `passphrase` (optional) - Override or provide private key passphrase
+- `connectionId` (optional) - Unique identifier for this connection
+
+**Returns:** Same as `ssh_connect`
+
+**Example:**
+```
+Connect to my prod-web preset
+```
+
+**Example with override:**
+```
+Connect to prod-web preset but use a different key at ~/.ssh/deploy_key
+```
 
 ## Usage Examples with Claude
 
