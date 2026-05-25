@@ -299,6 +299,66 @@ class SSHMCPServer {
     });
   }
 
+  /**
+   * Dynamically evaluate command timeout based on the command string.
+   * Recognizes known long-running operations (npm install, docker build, etc.)
+   * and returns an appropriate timeout in milliseconds.
+   */
+  private evaluateCommandTimeout(command: string, userTimeout?: number): number {
+    // User explicitly set a timeout — respect it
+    if (userTimeout !== undefined && userTimeout > 0) {
+      return userTimeout;
+    }
+
+    const cmd = command.toLowerCase();
+
+    // Package managers
+    if (/\b(npm|yarn|pnpm)\b/.test(cmd)) {
+      if (/\b(install|ci)\b/.test(cmd)) return 10 * 60 * 1000; // 10 min
+      if (/\b(run build|build)\b/.test(cmd)) return 5 * 60 * 1000; // 5 min
+      if (/\b(publish|pack)\b/.test(cmd)) return 3 * 60 * 1000;
+      return 2 * 60 * 1000; // 2 min
+    }
+
+    // Docker
+    if (/\bdocker\b/.test(cmd)) {
+      if (/\bbuild\b/.test(cmd)) return 30 * 60 * 1000; // 30 min
+      if (/\b(push|pull)\b/.test(cmd)) return 10 * 60 * 1000;
+      if (/\brun\b/.test(cmd)) return 5 * 60 * 1000;
+      return 2 * 60 * 1000;
+    }
+
+    // Git
+    if (/\bgit\b/.test(cmd)) {
+      if (/\b(clone|fetch)\b/.test(cmd)) return 5 * 60 * 1000;
+      if (/\b(push|pull)\b/.test(cmd)) return 3 * 60 * 1000;
+      return 60 * 1000;
+    }
+
+    // Build / compile
+    if (/\b(make|cmake|gradle|mvn|go build|cargo build)\b/.test(cmd)) {
+      return 10 * 60 * 1000;
+    }
+
+    // Test frameworks
+    if (/\b(test|jest|pytest|mocha|cypress|playwright)\b/.test(cmd)) {
+      return 5 * 60 * 1000;
+    }
+
+    // Database migrations
+    if (/\b(migrate|prisma|sequelize|alembic)\b/.test(cmd)) {
+      return 5 * 60 * 1000;
+    }
+
+    // Complex multi-command chains
+    if ((cmd.match(/&&|\||;/g) || []).length >= 3) {
+      return 5 * 60 * 1000;
+    }
+
+    // Default: 60 seconds
+    return 60000;
+  }
+
   private async handleSSHConnect(params: any) {
     const {
       host,
@@ -324,6 +384,8 @@ class SSHMCPServer {
       port,
       username,
       readyTimeout: 30000, // 30 seconds timeout for connection
+      keepaliveInterval: 30000, // Send keepalive every 30 seconds
+      keepaliveCountMax: 3,     // Allow 3 missed keepalives before disconnect
     };
 
     // Add authentication method
@@ -381,7 +443,8 @@ class SSHMCPServer {
   }
 
   private async handleSSHExec(params: any) {
-    const { connectionId, command, cwd, timeout = 60000 } = params;
+    const { connectionId, command, cwd, timeout: userTimeout } = params;
+    const timeout = this.evaluateCommandTimeout(command, userTimeout);
     
     // Check if the connection exists
     if (!this.connections.has(connectionId)) {
