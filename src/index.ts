@@ -398,15 +398,32 @@ class SSHMCPServer {
   }
 
   /**
-   * Load preset host configurations from hosts.json or SSH_MCP_HOSTS_CONFIG env var.
+   * Load preset host configurations from (in order of priority):
+   * 1. SSH_MCP_HOSTS_CONFIG env var
+   * 2. ~/.ssh-mcp.json
+   * 3. hosts.json in cwd (legacy fallback)
    */
   private loadPresets(): void {
-    const configPath = process.env.SSH_MCP_HOSTS_CONFIG
-      ? path.resolve(process.env.SSH_MCP_HOSTS_CONFIG)
-      : path.join(process.cwd(), 'hosts.json');
+    let configPath: string | null = null;
 
-    if (!fs.existsSync(configPath)) {
-      console.error(`No hosts config found at ${configPath}. Preset tools will be unavailable.`);
+    if (process.env.SSH_MCP_HOSTS_CONFIG) {
+      configPath = path.resolve(process.env.SSH_MCP_HOSTS_CONFIG);
+    } else {
+      const homeConfig = path.join(os.homedir(), '.ssh-mcp.json');
+      const cwdConfig = path.join(process.cwd(), 'hosts.json');
+
+      if (fs.existsSync(homeConfig)) {
+        configPath = homeConfig;
+      } else if (fs.existsSync(cwdConfig)) {
+        configPath = cwdConfig;
+      }
+    }
+
+    if (!configPath || !fs.existsSync(configPath)) {
+      console.error('No hosts config found. Expected one of:');
+      console.error(`  - ${path.join(os.homedir(), '.ssh-mcp.json')} (recommended)`);
+      console.error(`  - ${path.join(process.cwd(), 'hosts.json')} (legacy)`);
+      console.error('Or set SSH_MCP_HOSTS_CONFIG env var. Preset tools will be unavailable.');
       return;
     }
 
@@ -862,7 +879,7 @@ class SSHMCPServer {
   private async handleSSHListPresets(_params: any) {
     if (this.presets.size === 0) {
       return {
-        content: [{ type: "text", text: "No SSH presets configured. Create a hosts.json file or set SSH_MCP_HOSTS_CONFIG." }],
+        content: [{ type: "text", text: "No SSH presets configured. Create ~/.ssh-mcp.json or set SSH_MCP_HOSTS_CONFIG." }],
         isError: false
       };
     }
