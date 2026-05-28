@@ -138,7 +138,7 @@ Configured SSH presets:
 ### 使用预设连接
 
 ```
-ssh_connect_preset
+ssh_connect
 - preset: my-vps
 - connectionId: vps-01
 ```
@@ -146,7 +146,7 @@ ssh_connect_preset
 ### 覆盖预设字段
 
 ```
-ssh_connect_preset
+ssh_connect
 - preset: my-vps
 - username: root
 - connectionId: vps-root

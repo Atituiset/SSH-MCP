@@ -53,17 +53,17 @@ class SSHMCPServer {
         capabilities: {
           tools: {
             ssh_connect: {
-              description: "Connect to a remote server via SSH. Two modes: (1) provide a preset name when the user mentions a server by name or alias (e.g., 'my-server', 'XXX机器') — host, username, and auth are read from config automatically; (2) provide host, username, and credentials manually when no preset exists.",
+              description: "Connect to a remote server via SSH. STEP 1: When the user mentions a server by name or alias, FIRST pass that name as the 'preset' parameter — the server automatically looks it up in the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). If the preset exists, the connection succeeds with no further input. If the preset is NOT found, the server returns available preset names. ONLY THEN (STEP 2) ask the user for host and username. Direct host/username input is only for raw IP addresses where no preset exists.",
               inputSchema: {
                 type: "object",
                 properties: {
                   preset: {
                     type: "string",
-                    description: "Preset name when user mentions a server by name or alias (e.g., 'my-server', 'XXX机器'). Reads host, username, and auth from config automatically."
+                    description: "ALWAYS try this first. The server name the user mentioned (e.g., 'my-server', 'prod', 'XXX机器'). The server checks the config file automatically. If not found, it lists available presets."
                   },
                   host: {
                     type: "string",
-                    description: "IP address or hostname. Use only when preset is not provided."
+                    description: "Fallback only: IP or hostname. Use ONLY when preset lookup fails."
                   },
                   port: {
                     type: "number",
@@ -71,15 +71,15 @@ class SSHMCPServer {
                   },
                   username: {
                     type: "string",
-                    description: "SSH username. Use only when preset is not provided."
+                    description: "Fallback only: SSH username. Use ONLY when preset lookup fails."
                   },
                   password: {
                     type: "string",
-                    description: "SSH password. Use only when preset is not provided."
+                    description: "Fallback only: SSH password. Use ONLY when preset lookup fails."
                   },
                   privateKeyPath: {
                     type: "string",
-                    description: "Path to private key file. Use only when preset is not provided."
+                    description: "Fallback only: Path to private key. Use ONLY when preset lookup fails."
                   },
                   passphrase: {
                     type: "string",
@@ -218,16 +218,16 @@ class SSHMCPServer {
       tools: [
         {
           name: 'ssh_connect',
-          description: 'Connect to a remote server via SSH. Two modes: (1) provide a preset name when the user mentions a server by name or alias (e.g., "my-server", "XXX机器") — host, username, and auth are read from config automatically; (2) provide host, username, and credentials manually when no preset exists.',
+          description: 'Connect to a remote server via SSH. STEP 1: When the user mentions a server by name or alias, FIRST pass that name as the "preset" parameter — the server automatically looks it up in the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). If the preset exists, the connection succeeds with no further input. If the preset is NOT found, the server returns available preset names. ONLY THEN (STEP 2) ask the user for host and username. Direct host/username input is only for raw IP addresses where no preset exists.',
           inputSchema: {
             type: 'object',
             properties: {
-              preset: { type: 'string', description: 'Preset name when user mentions a server by name or alias (e.g., "my-server", "XXX机器"). Reads host, username, and auth from config automatically.' },
-              host: { type: 'string', description: 'IP address or hostname. Use only when preset is not provided.' },
+              preset: { type: 'string', description: 'ALWAYS try this first. The server name the user mentioned (e.g., "my-server", "prod", "XXX机器"). The server checks the config file automatically. If not found, it lists available presets.' },
+              host: { type: 'string', description: 'Fallback only: IP or hostname. Use ONLY when preset lookup fails.' },
               port: { type: 'number', description: 'SSH port (default: 22)' },
-              username: { type: 'string', description: 'SSH username. Use only when preset is not provided.' },
-              password: { type: 'string', description: 'SSH password. Use only when preset is not provided.' },
-              privateKeyPath: { type: 'string', description: 'Path to private key file. Use only when preset is not provided.' },
+              username: { type: 'string', description: 'Fallback only: SSH username. Use ONLY when preset lookup fails.' },
+              password: { type: 'string', description: 'Fallback only: SSH password. Use ONLY when preset lookup fails.' },
+              privateKeyPath: { type: 'string', description: 'Fallback only: Path to private key. Use ONLY when preset lookup fails.' },
               passphrase: { type: 'string', description: 'Passphrase for private key' },
               connectionId: { type: 'string', description: 'Unique identifier for this connection' }
             },

@@ -176,25 +176,26 @@ The server watches the config file and **automatically reloads presets within ~1
 ### Core SSH Tools
 
 ### ssh_connect
-Establish an SSH connection to a remote server.
+Establish an SSH connection to a remote server. Supports two modes: preset-based (auto-lookup from config) or manual (explicit credentials).
 
 **Parameters:**
-- `host` (required) - Hostname or IP address
-- `username` (required) - SSH username  
-- `password` (optional) - SSH password
-- `privateKeyPath` (optional) - Path to private key file
+- `preset` (optional, try first) - Preset name from config file. When the user mentions a server by name/alias, pass it here — the server auto-looks up host, username, and auth.
+- `host` (fallback) - IP address or hostname. Only use when preset lookup fails.
+- `username` (fallback) - SSH username. Only use when preset lookup fails.
+- `password` (fallback) - SSH password. Only use when preset lookup fails.
+- `privateKeyPath` (fallback) - Path to private key. Only use when preset lookup fails.
 - `passphrase` (optional) - Passphrase for private key
 - `port` (optional) - SSH port (default: 22)
 - `connectionId` (optional) - Unique identifier for this connection
 
-**Returns:**
-- `success` - Boolean indicating success
-- `connectionId` - ID to use for subsequent commands
-- `message` - Connection status message
-
-**Example:**
+**Preset mode (recommended):**
 ```
-Connect to my server at example.com using username 'admin' and password authentication
+Connect to my prod-web preset
+```
+
+**Manual mode (fallback):**
+```
+Connect to 192.168.1.100 using username 'admin' and password
 ```
 
 ### ssh_exec
@@ -277,31 +278,6 @@ List all pre-configured SSH hosts from `hosts.json`.
 **Example:**
 ```
 Show me all configured SSH presets
-```
-
-### ssh_connect_preset
-Connect to a remote server using a pre-configured host preset.
-
-**Parameters:**
-- `preset` (required) - Name of the preset to use
-- `host` (optional) - Override the preset hostname or IP
-- `port` (optional) - Override the SSH port
-- `username` (optional) - Override the SSH username
-- `password` (optional) - Override or provide password authentication
-- `privateKeyPath` (optional) - Override or provide private key path
-- `passphrase` (optional) - Override or provide private key passphrase
-- `connectionId` (optional) - Unique identifier for this connection
-
-**Returns:** Same as `ssh_connect`
-
-**Example:**
-```
-Connect to my prod-web preset
-```
-
-**Example with override:**
-```
-Connect to prod-web preset but use a different key at ~/.ssh/deploy_key
 ```
 
 ## Usage Examples with Claude
