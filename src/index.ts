@@ -53,7 +53,7 @@ class SSHMCPServer {
         capabilities: {
           tools: {
             ssh_connect: {
-              description: "Connect to a remote server via SSH",
+              description: "Manually connect to a remote server via SSH with explicit host, username, and credentials. Use this ONLY when the target server has NO preset configured. The user must provide host, username, and either password or privateKeyPath. If the user mentions a server name or alias (e.g., \"connect to my-server\"), prefer ssh_connect_preset instead — the preset already contains all connection details.",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -187,7 +187,7 @@ class SSHMCPServer {
               }
             },
             ssh_list_presets: {
-              description: "List all pre-configured SSH hosts",
+              description: "List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to (e.g., \"connect to a server\" without naming one), or after ssh_connect_preset fails with \"Unknown preset\" to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.",
               inputSchema: {
                 type: "object",
                 properties: {},
@@ -195,13 +195,13 @@ class SSHMCPServer {
               }
             },
             ssh_connect_preset: {
-              description: "Connect to a remote server using a pre-configured host preset",
+              description: "Connect to a remote server using a PRECONFIGURED preset from ~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG. This is the PRIMARY way to connect — presets already include host, username, and authentication (password or private key), so the user does NOT need to provide credentials again. When the user says \"connect to X\" or \"SSH into X\", X is the preset name — pass it directly as the \"preset\" parameter. If the preset does not exist, the server will return an error with available preset names. Any field can be overridden if needed.",
               inputSchema: {
                 type: "object",
                 properties: {
                   preset: {
                     type: "string",
-                    description: "Name of the preset to use"
+                    description: "Name of the preset to use. When the user says \"connect to my-server\" or \"SSH into the prod box\", the preset name is exactly what they said (e.g., \"my-server\" or \"prod\")"
                   },
                   host: {
                     type: "string",
