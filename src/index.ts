@@ -37,6 +37,9 @@ class SSHMCPServer {
   private server: Server;
   private connections: Map<string, { conn: Client; config: any }>;
   private presets: Map<string, SSHPreset>;
+  private configPath: string | null = null;
+  private reloadDebounceTimer: NodeJS.Timeout | null = null;
+  private isWatchingConfig: boolean = false;
 
   constructor() {
     this.connections = new Map();
@@ -398,28 +401,120 @@ class SSHMCPServer {
   }
 
   /**
-   * Load preset host configurations from (in order of priority):
+   * Determine the config file path (in order of priority):
    * 1. SSH_MCP_HOSTS_CONFIG env var
    * 2. ~/.ssh-mcp.json
    * 3. hosts.json in cwd (legacy fallback)
    */
-  private loadPresets(): void {
-    let configPath: string | null = null;
-
+  private resolveConfigPath(): string | null {
     if (process.env.SSH_MCP_HOSTS_CONFIG) {
-      configPath = path.resolve(process.env.SSH_MCP_HOSTS_CONFIG);
-    } else {
-      const homeConfig = path.join(os.homedir(), '.ssh-mcp.json');
-      const cwdConfig = path.join(process.cwd(), 'hosts.json');
-
-      if (fs.existsSync(homeConfig)) {
-        configPath = homeConfig;
-      } else if (fs.existsSync(cwdConfig)) {
-        configPath = cwdConfig;
-      }
+      return path.resolve(process.env.SSH_MCP_HOSTS_CONFIG);
     }
 
-    if (!configPath || !fs.existsSync(configPath)) {
+    const homeConfig = path.join(os.homedir(), '.ssh-mcp.json');
+    if (fs.existsSync(homeConfig)) {
+      return homeConfig;
+    }
+
+    const cwdConfig = path.join(process.cwd(), 'hosts.json');
+    if (fs.existsSync(cwdConfig)) {
+      return cwdConfig;
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse presets from a config file and populate this.presets.
+   * Throws on invalid JSON or missing "presets" object.
+   */
+  private parsePresets(configPath: string): void {
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const parsed: HostsConfig = JSON.parse(raw);
+
+    if (!parsed.presets || typeof parsed.presets !== 'object') {
+      throw new Error('Invalid hosts config: missing "presets" object');
+    }
+
+    for (const [name, preset] of Object.entries(parsed.presets)) {
+      if (!preset.host || !preset.username) {
+        console.error(`Skipping preset "${name}": missing host or username`);
+        continue;
+      }
+
+      if (!preset.password && !preset.privateKeyPath) {
+        console.error(`Skipping preset "${name}": no password or privateKeyPath`);
+        continue;
+      }
+
+      if (preset.privateKeyPath) {
+        preset.privateKeyPath = preset.privateKeyPath.replace(/^~/, os.homedir());
+      }
+
+      if (!preset.port) {
+        preset.port = 22;
+      }
+
+      this.presets.set(name, preset);
+    }
+  }
+
+  /**
+   * Reload presets from the current configPath.
+   * On failure, keeps the previous presets (fail-safe).
+   */
+  private reloadPresets(): void {
+    if (!this.configPath) return;
+
+    const oldPresets = new Map(this.presets);
+    this.presets.clear();
+
+    try {
+      if (!fs.existsSync(this.configPath)) {
+        throw new Error(`Config file no longer exists: ${this.configPath}`);
+      }
+      this.parsePresets(this.configPath);
+      console.error(`Reloaded ${this.presets.size} SSH preset(s) from ${this.configPath}`);
+    } catch (err: any) {
+      console.error(`Failed to reload presets: ${err.message}`);
+      console.error('Keeping previous presets.');
+      this.presets = oldPresets;
+    }
+  }
+
+  /**
+   * Set up a file watcher on the config file for hot-reload.
+   * Uses fs.watchFile with debounce to avoid multiple rapid reloads.
+   * Only sets up the watcher once.
+   */
+  private setupConfigWatcher(): void {
+    if (!this.configPath || this.isWatchingConfig) return;
+
+    this.isWatchingConfig = true;
+
+    fs.watchFile(this.configPath, { interval: 1000 }, (curr, prev) => {
+      if (curr.mtime.getTime() === prev.mtime.getTime()) return;
+
+      if (this.reloadDebounceTimer) {
+        clearTimeout(this.reloadDebounceTimer);
+      }
+
+      this.reloadDebounceTimer = setTimeout(() => {
+        this.reloadDebounceTimer = null;
+        console.error(`Config file changed, reloading presets...`);
+        this.reloadPresets();
+      }, 300);
+    });
+  }
+
+  /**
+   * Load preset host configurations on startup.
+   * Also starts watching the config file for changes.
+   */
+  private loadPresets(): void {
+    this.configPath = this.resolveConfigPath();
+
+    if (!this.configPath || !fs.existsSync(this.configPath)) {
       console.error('No hosts config found. Expected one of:');
       console.error(`  - ${path.join(os.homedir(), '.ssh-mcp.json')} (recommended)`);
       console.error(`  - ${path.join(process.cwd(), 'hosts.json')} (legacy)`);
@@ -427,41 +522,8 @@ class SSHMCPServer {
       return;
     }
 
-    try {
-      const raw = fs.readFileSync(configPath, 'utf-8');
-      const parsed: HostsConfig = JSON.parse(raw);
-
-      if (!parsed.presets || typeof parsed.presets !== 'object') {
-        console.error('Invalid hosts.json: missing "presets" object');
-        return;
-      }
-
-      for (const [name, preset] of Object.entries(parsed.presets)) {
-        if (!preset.host || !preset.username) {
-          console.error(`Skipping preset "${name}": missing host or username`);
-          continue;
-        }
-
-        if (!preset.password && !preset.privateKeyPath) {
-          console.error(`Skipping preset "${name}": no password or privateKeyPath`);
-          continue;
-        }
-
-        if (preset.privateKeyPath) {
-          preset.privateKeyPath = preset.privateKeyPath.replace(/^~/, os.homedir());
-        }
-
-        if (!preset.port) {
-          preset.port = 22;
-        }
-
-        this.presets.set(name, preset);
-      }
-
-      console.error(`Loaded ${this.presets.size} SSH preset(s) from ${configPath}`);
-    } catch (err: any) {
-      console.error(`Failed to load presets: ${err.message}`);
-    }
+    this.reloadPresets();
+    this.setupConfigWatcher();
   }
 
   /**

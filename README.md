@@ -108,9 +108,15 @@ Create or edit `.vscode/mcp.json` in your workspace:
 
 ### Preset Host Configuration
 
-You can pre-configure commonly used SSH hosts in a `hosts.json` file, allowing AI to connect by name without typing full connection details every time.
+Pre-configure commonly used SSH hosts so AI can connect by name without typing full connection details every time.
 
-1. Create `hosts.json` in the project root (next to `package.json`):
+**Config file lookup order** (first match wins):
+
+1. `SSH_MCP_HOSTS_CONFIG` environment variable
+2. `~/.ssh-mcp.json` (recommended — user-wide, follows your account)
+3. `./hosts.json` in the project directory
+
+**Example `~/.ssh-mcp.json`:**
 
 ```json
 {
@@ -132,16 +138,16 @@ You can pre-configure commonly used SSH hosts in a `hosts.json` file, allowing A
 ```
 
 **Fields:**
-- `host` (required) - Hostname or IP address
-- `username` (required) - SSH username
-- `port` (optional) - SSH port, defaults to 22
-- `privateKeyPath` (optional) - Path to private key file for key-based auth
-- `passphrase` (optional) - Passphrase for the private key
-- `password` (optional) - Password for password-based auth
+- `host` (required) — Hostname or IP address
+- `username` (required) — SSH username
+- `port` (optional) — SSH port, defaults to `22`
+- `privateKeyPath` (optional) — Path to private key file; `~` expands to home directory
+- `passphrase` (optional) — Passphrase for the private key
+- `password` (optional) — Password for password-based auth
 
-**Note:** Either `privateKeyPath` or `password` must be provided for each preset.
+At least one of `privateKeyPath` or `password` must be provided per preset.
 
-**Custom config path:** Set the `SSH_MCP_HOSTS_CONFIG` environment variable to use a different file:
+**Custom config path** via environment variable:
 
 ```json
 {
@@ -156,6 +162,14 @@ You can pre-configure commonly used SSH hosts in a `hosts.json` file, allowing A
   }
 }
 ```
+
+#### Hot Reload
+
+The server watches the config file and **automatically reloads presets within ~1.3 seconds** after you save changes. No restart needed.
+
+- Valid changes apply immediately
+- Invalid JSON or syntax errors **keep the previous presets** and log an error
+- Existing SSH connections are unaffected
 
 ## Available Tools
 
