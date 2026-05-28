@@ -53,7 +53,7 @@ class SSHMCPServer {
         capabilities: {
           tools: {
             ssh_connect: {
-              description: "Manually connect to a remote server via SSH with explicit host, username, and credentials. Use this ONLY when the target server has NO preset configured. The user must provide host, username, and either password or privateKeyPath. If the user mentions a server name or alias (e.g., \"connect to my-server\"), prefer ssh_connect_preset instead — the preset already contains all connection details.",
+              description: "MANUAL fallback for connecting to a raw IP address or hostname when NO preset exists. NEVER use this tool when the user mentions a server name, alias, or nickname — use ssh_connect_preset instead. The user must provide host, username, and either password or privateKeyPath. If you are unsure whether a preset exists, try ssh_connect_preset first — the server will tell you if it doesn't exist.",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -195,13 +195,13 @@ class SSHMCPServer {
               }
             },
             ssh_connect_preset: {
-              description: "Connect to a remote server using a PRECONFIGURED preset from ~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG. This is the PRIMARY way to connect — presets already include host, username, and authentication (password or private key), so the user does NOT need to provide credentials again. When the user says \"connect to X\" or \"SSH into X\", X is the preset name — pass it directly as the \"preset\" parameter. If the preset does not exist, the server will return an error with available preset names. Any field can be overridden if needed.",
+              description: "DEFAULT tool for connecting to servers by name or alias. ALWAYS use this first when the user mentions any server name (e.g., 'my-server', 'prod', 'XXX机器'). The name the user provides IS the preset name — pass it directly as the 'preset' parameter. Presets already contain host, username, and authentication, so NEVER ask the user for credentials. If the preset does not exist, the server returns an error listing available presets — it is always safe to try. Only fall back to ssh_connect if the user explicitly provides a raw IP address and confirms no preset exists.",
               inputSchema: {
                 type: "object",
                 properties: {
                   preset: {
                     type: "string",
-                    description: "Name of the preset to use. When the user says \"connect to my-server\" or \"SSH into the prod box\", the preset name is exactly what they said (e.g., \"my-server\" or \"prod\")"
+                    description: "The server name or alias from the user's request. Examples: user says 'connect to my-server' → preset='my-server'; user says 'SSH to prod' → preset='prod'; user says '连接XXX机器' → preset='XXX机器'. Pass the exact name the user used."
                   },
                   host: {
                     type: "string",
@@ -255,7 +255,7 @@ class SSHMCPServer {
       tools: [
         {
           name: 'ssh_connect',
-          description: 'Manually connect to a remote server via SSH with explicit host, username, and credentials. Use this ONLY when the target server has NO preset configured. The user must provide host, username, and either password or privateKeyPath. If the user mentions a server name or alias (e.g., "connect to my-server"), prefer ssh_connect_preset instead — the preset already contains all connection details.',
+          description: 'MANUAL fallback for connecting to a raw IP address or hostname when NO preset exists. NEVER use this tool when the user mentions a server name, alias, or nickname — use ssh_connect_preset instead. The user must provide host, username, and either password or privateKeyPath. If you are unsure whether a preset exists, try ssh_connect_preset first — the server will tell you if it doesn\'t exist.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -344,11 +344,11 @@ class SSHMCPServer {
         },
         {
           name: 'ssh_connect_preset',
-          description: 'Connect to a remote server using a PRECONFIGURED preset from ~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG. This is the PRIMARY way to connect — presets already include host, username, and authentication (password or private key), so the user does NOT need to provide credentials again. When the user says "connect to X" or "SSH into X", X is the preset name — pass it directly as the "preset" parameter. If the preset does not exist, the server will return an error with available preset names. Any field can be overridden if needed.',
+          description: 'DEFAULT tool for connecting to servers by name or alias. ALWAYS use this first when the user mentions any server name (e.g., "my-server", "prod", "XXX机器"). The name the user provides IS the preset name — pass it directly as the "preset" parameter. Presets already contain host, username, and authentication, so NEVER ask the user for credentials. If the preset does not exist, the server returns an error listing available presets — it is always safe to try. Only fall back to ssh_connect if the user explicitly provides a raw IP address and confirms no preset exists.',
           inputSchema: {
             type: 'object',
             properties: {
-              preset: { type: 'string', description: 'Name of the preset to use. When the user says "connect to my-server" or "SSH into the prod box", the preset name is exactly what they said (e.g., "my-server" or "prod")' },
+              preset: { type: 'string', description: 'The server name or alias from the user\'s request. Examples: user says "connect to my-server" → preset="my-server"; user says "SSH to prod" → preset="prod"; user says "连接XXX机器" → preset="XXX机器". Pass the exact name the user used.' },
               host: { type: 'string', description: 'Override the preset hostname or IP' },
               port: { type: 'number', description: 'Override the SSH port' },
               username: { type: 'string', description: 'Override the SSH username' },
