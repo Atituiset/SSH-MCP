@@ -53,13 +53,17 @@ class SSHMCPServer {
         capabilities: {
           tools: {
             ssh_connect: {
-              description: "MANUAL fallback for connecting to a raw IP address or hostname when NO preset exists. NEVER use this tool when the user mentions a server name, alias, or nickname — use ssh_connect_preset instead. The user must provide host, username, and either password or privateKeyPath. If you are unsure whether a preset exists, try ssh_connect_preset first — the server will tell you if it doesn't exist.",
+              description: "Connect to a remote server via SSH. Two modes: (1) provide a preset name when the user mentions a server by name or alias (e.g., 'my-server', 'XXX机器') — host, username, and auth are read from config automatically; (2) provide host, username, and credentials manually when no preset exists.",
               inputSchema: {
                 type: "object",
                 properties: {
+                  preset: {
+                    type: "string",
+                    description: "Preset name when user mentions a server by name or alias (e.g., 'my-server', 'XXX机器'). Reads host, username, and auth from config automatically."
+                  },
                   host: {
                     type: "string",
-                    description: "Hostname or IP address of the remote server"
+                    description: "IP address or hostname. Use only when preset is not provided."
                   },
                   port: {
                     type: "number",
@@ -67,26 +71,26 @@ class SSHMCPServer {
                   },
                   username: {
                     type: "string",
-                    description: "SSH username"
+                    description: "SSH username. Use only when preset is not provided."
                   },
                   password: {
                     type: "string",
-                    description: "SSH password (if not using key-based authentication)"
+                    description: "SSH password. Use only when preset is not provided."
                   },
                   privateKeyPath: {
                     type: "string",
-                    description: "Path to private key file (if using key-based authentication)"
+                    description: "Path to private key file. Use only when preset is not provided."
                   },
                   passphrase: {
                     type: "string",
-                    description: "Passphrase for private key (if needed)"
+                    description: "Passphrase for private key"
                   },
                   connectionId: {
                     type: "string",
-                    description: "Unique identifier for this connection (to reference in future commands)"
+                    description: "Unique identifier for this connection"
                   }
                 },
-                required: ["host", "username"]
+                required: []
               }
             },
             ssh_exec: {
@@ -187,52 +191,11 @@ class SSHMCPServer {
               }
             },
             ssh_list_presets: {
-              description: "List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to (e.g., \"connect to a server\" without naming one), or after ssh_connect_preset fails with \"Unknown preset\" to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.",
+              description: "List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to, or after ssh_connect with a preset name fails to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.",
               inputSchema: {
                 type: "object",
                 properties: {},
                 required: []
-              }
-            },
-            ssh_connect_preset: {
-              description: "DEFAULT tool for connecting to servers by name or alias. ALWAYS use this first when the user mentions any server name (e.g., 'my-server', 'prod', 'XXX机器'). The name the user provides IS the preset name — pass it directly as the 'preset' parameter. Presets already contain host, username, and authentication, so NEVER ask the user for credentials. If the preset does not exist, the server returns an error listing available presets — it is always safe to try. Only fall back to ssh_connect if the user explicitly provides a raw IP address and confirms no preset exists.",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  preset: {
-                    type: "string",
-                    description: "The server name or alias from the user's request. Examples: user says 'connect to my-server' → preset='my-server'; user says 'SSH to prod' → preset='prod'; user says '连接XXX机器' → preset='XXX机器'. Pass the exact name the user used."
-                  },
-                  host: {
-                    type: "string",
-                    description: "Override the preset hostname or IP"
-                  },
-                  port: {
-                    type: "number",
-                    description: "Override the SSH port"
-                  },
-                  username: {
-                    type: "string",
-                    description: "Override the SSH username"
-                  },
-                  password: {
-                    type: "string",
-                    description: "Override or provide password authentication"
-                  },
-                  privateKeyPath: {
-                    type: "string",
-                    description: "Override or provide private key path"
-                  },
-                  passphrase: {
-                    type: "string",
-                    description: "Override or provide private key passphrase"
-                  },
-                  connectionId: {
-                    type: "string",
-                    description: "Unique identifier for this connection"
-                  }
-                },
-                required: ["preset"]
               }
             }
           }
@@ -255,19 +218,20 @@ class SSHMCPServer {
       tools: [
         {
           name: 'ssh_connect',
-          description: 'MANUAL fallback for connecting to a raw IP address or hostname when NO preset exists. NEVER use this tool when the user mentions a server name, alias, or nickname — use ssh_connect_preset instead. The user must provide host, username, and either password or privateKeyPath. If you are unsure whether a preset exists, try ssh_connect_preset first — the server will tell you if it doesn\'t exist.',
+          description: 'Connect to a remote server via SSH. Two modes: (1) provide a preset name when the user mentions a server by name or alias (e.g., "my-server", "XXX机器") — host, username, and auth are read from config automatically; (2) provide host, username, and credentials manually when no preset exists.',
           inputSchema: {
             type: 'object',
             properties: {
-              host: { type: 'string', description: 'Hostname or IP address of the remote server' },
+              preset: { type: 'string', description: 'Preset name when user mentions a server by name or alias (e.g., "my-server", "XXX机器"). Reads host, username, and auth from config automatically.' },
+              host: { type: 'string', description: 'IP address or hostname. Use only when preset is not provided.' },
               port: { type: 'number', description: 'SSH port (default: 22)' },
-              username: { type: 'string', description: 'SSH username' },
-              password: { type: 'string', description: 'SSH password (if not using key-based authentication)' },
-              privateKeyPath: { type: 'string', description: 'Path to private key file (if using key-based authentication)' },
-              passphrase: { type: 'string', description: 'Passphrase for private key (if needed)' },
+              username: { type: 'string', description: 'SSH username. Use only when preset is not provided.' },
+              password: { type: 'string', description: 'SSH password. Use only when preset is not provided.' },
+              privateKeyPath: { type: 'string', description: 'Path to private key file. Use only when preset is not provided.' },
+              passphrase: { type: 'string', description: 'Passphrase for private key' },
               connectionId: { type: 'string', description: 'Unique identifier for this connection' }
             },
-            required: ['host', 'username']
+            required: []
           }
         },
         {
@@ -335,29 +299,11 @@ class SSHMCPServer {
         },
         {
           name: 'ssh_list_presets',
-          description: 'List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to (e.g., "connect to a server" without naming one), or after ssh_connect_preset fails with "Unknown preset" to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.',
+          description: 'List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to, or after ssh_connect with a preset name fails to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.',
           inputSchema: {
             type: 'object',
             properties: {},
             required: []
-          }
-        },
-        {
-          name: 'ssh_connect_preset',
-          description: 'DEFAULT tool for connecting to servers by name or alias. ALWAYS use this first when the user mentions any server name (e.g., "my-server", "prod", "XXX机器"). The name the user provides IS the preset name — pass it directly as the "preset" parameter. Presets already contain host, username, and authentication, so NEVER ask the user for credentials. If the preset does not exist, the server returns an error listing available presets — it is always safe to try. Only fall back to ssh_connect if the user explicitly provides a raw IP address and confirms no preset exists.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              preset: { type: 'string', description: 'The server name or alias from the user\'s request. Examples: user says "connect to my-server" → preset="my-server"; user says "SSH to prod" → preset="prod"; user says "连接XXX机器" → preset="XXX机器". Pass the exact name the user used.' },
-              host: { type: 'string', description: 'Override the preset hostname or IP' },
-              port: { type: 'number', description: 'Override the SSH port' },
-              username: { type: 'string', description: 'Override the SSH username' },
-              password: { type: 'string', description: 'Override or provide password authentication' },
-              privateKeyPath: { type: 'string', description: 'Override or provide private key path' },
-              passphrase: { type: 'string', description: 'Override or provide private key passphrase' },
-              connectionId: { type: 'string', description: 'Unique identifier for this connection' }
-            },
-            required: ['preset']
           }
         }
       ]
@@ -384,8 +330,6 @@ class SSHMCPServer {
             return this.handleSSHDisconnect(request.params.arguments);
           case 'ssh_list_presets':
             return this.handleSSHListPresets(request.params.arguments);
-          case 'ssh_connect_preset':
-            return this.handleSSHConnectPreset(request.params.arguments);
           default:
             throw new Error(`Unknown SSH tool: ${toolName}`);
         }
@@ -588,14 +532,52 @@ class SSHMCPServer {
 
   private async handleSSHConnect(params: any) {
     const {
-      host,
-      port = 22,
-      username,
-      password,
-      privateKeyPath,
-      passphrase,
+      preset: presetName,
+      host: rawHost,
+      port: rawPort = 22,
+      username: rawUsername,
+      password: rawPassword,
+      privateKeyPath: rawPrivateKeyPath,
+      passphrase: rawPassphrase,
       connectionId = `ssh-${Date.now()}`
     } = params;
+
+    // Resolve preset if provided
+    let host = rawHost;
+    let port = rawPort;
+    let username = rawUsername;
+    let password = rawPassword;
+    let privateKeyPath = rawPrivateKeyPath;
+    let passphrase = rawPassphrase;
+
+    if (presetName) {
+      if (!this.presets.has(presetName)) {
+        const available = Array.from(this.presets.keys());
+        return {
+          content: [{
+            type: "text",
+            text: `Preset "${presetName}" not found. Available presets: ${available.length > 0 ? available.join(', ') : 'none'}`
+          }],
+          isError: true
+        };
+      }
+
+      const preset = this.presets.get(presetName)!;
+      host = rawHost ?? preset.host;
+      port = rawPort ?? preset.port ?? 22;
+      username = rawUsername ?? preset.username;
+      password = rawPassword ?? preset.password;
+      privateKeyPath = rawPrivateKeyPath ?? preset.privateKeyPath;
+      passphrase = rawPassphrase ?? preset.passphrase;
+    }
+
+    // Validate required params
+    if (!host || !username) {
+      return {
+        content: [{ type: "text", text: "Provide either a preset name, or both host and username." }],
+        isError: true
+      };
+    }
 
     // Verify we have either a password or a private key
     if (!password && !privateKeyPath) {
@@ -610,18 +592,16 @@ class SSHMCPServer {
       host,
       port,
       username,
-      readyTimeout: 30000, // 30 seconds timeout for connection
-      keepaliveInterval: 30000, // Send keepalive every 30 seconds
-      keepaliveCountMax: 3,     // Allow 3 missed keepalives before disconnect
+      readyTimeout: 30000,
+      keepaliveInterval: 30000,
+      keepaliveCountMax: 3,
     };
 
     // Add authentication method
     if (privateKeyPath) {
       try {
-        // Expand tilde if present in the path
         const expandedPath = privateKeyPath.replace(/^~/, os.homedir());
         sshConfig.privateKey = fs.readFileSync(expandedPath);
-        
         if (passphrase) {
           sshConfig.passphrase = passphrase;
         }
@@ -637,28 +617,20 @@ class SSHMCPServer {
 
     // Create a new SSH client
     const conn = new Client();
-    
+
     try {
-      // Connect to the server and wait for the "ready" event
       await new Promise((resolve, reject) => {
-        conn.on("ready", () => {
-          resolve(true);
-        });
-        
-        conn.on("error", (err: Error) => {
-          reject(new Error(`SSH connection error: ${err.message}`));
-        });
-        
+        conn.on("ready", () => resolve(true));
+        conn.on("error", (err: Error) => reject(new Error(`SSH connection error: ${err.message}`)));
         conn.connect(sshConfig);
       });
-      
-      // Store the connection for future use
+
       this.connections.set(connectionId, { conn, config: { host, port, username } });
-      
+
       return {
-        content: [{ 
-          type: "text", 
-          text: `Successfully connected to ${username}@${host}:${port}\nConnection ID: ${connectionId}` 
+        content: [{
+          type: "text",
+          text: `Successfully connected to ${username}@${host}:${port}\nConnection ID: ${connectionId}`
         }]
       };
     } catch (error: any) {
@@ -960,38 +932,6 @@ class SSHMCPServer {
         text: `Configured SSH presets:\n\n${JSON.stringify(list, null, 2)}`
       }]
     };
-  }
-
-  private async handleSSHConnectPreset(params: any) {
-    const { preset: presetName, connectionId, ...overrides } = params;
-
-    if (!this.presets.has(presetName)) {
-      return {
-        content: [{ type: "text", text: `Unknown preset: "${presetName}". Use ssh_list_presets to see available presets.` }],
-        isError: true
-      };
-    }
-
-    const preset = this.presets.get(presetName)!;
-
-    const merged = {
-      host: overrides.host ?? preset.host,
-      port: overrides.port ?? preset.port,
-      username: overrides.username ?? preset.username,
-      password: overrides.password ?? preset.password,
-      privateKeyPath: overrides.privateKeyPath ?? preset.privateKeyPath,
-      passphrase: overrides.passphrase ?? preset.passphrase,
-      connectionId
-    };
-
-    if (!merged.password && !merged.privateKeyPath) {
-      return {
-        content: [{ type: "text", text: `Preset "${presetName}" has no authentication method configured, and none was provided as an override. Please provide password or privateKeyPath.` }],
-        isError: true
-      };
-    }
-
-    return this.handleSSHConnect(merged);
   }
 
   async start() {
