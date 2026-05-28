@@ -255,7 +255,7 @@ class SSHMCPServer {
       tools: [
         {
           name: 'ssh_connect',
-          description: 'Connect to a remote server via SSH using explicit host, username, and credentials. If pre-configured hosts exist in ~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG, use ssh_list_presets and ssh_connect_preset instead for convenience.',
+          description: 'Manually connect to a remote server via SSH with explicit host, username, and credentials. Use this ONLY when the target server has NO preset configured. The user must provide host, username, and either password or privateKeyPath. If the user mentions a server name or alias (e.g., "connect to my-server"), prefer ssh_connect_preset instead — the preset already contains all connection details.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -335,7 +335,7 @@ class SSHMCPServer {
         },
         {
           name: 'ssh_list_presets',
-          description: 'List all pre-configured SSH host presets loaded from ~/.ssh-mcp.json, hosts.json, or the SSH_MCP_HOSTS_CONFIG environment variable. The server auto-discovers the config file on startup and hot-reloads it when changed. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths. Call this before ssh_connect_preset to discover available presets.',
+          description: 'List all pre-configured SSH host presets from the config file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The server loads this on startup and hot-reloads when changed. Use this when the user is vague about which server to connect to (e.g., "connect to a server" without naming one), or after ssh_connect_preset fails with "Unknown preset" to discover available names. Returns preset names and metadata (auth type, host, port, username) without exposing passwords or key paths.',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -344,11 +344,11 @@ class SSHMCPServer {
         },
         {
           name: 'ssh_connect_preset',
-          description: 'Connect to a remote server using a named preset from the SSH host configuration file (~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG). The preset name must exist; call ssh_list_presets first to discover available presets. Any connection parameter (host, port, username, password, privateKeyPath, passphrase) can be overridden by passing it explicitly.',
+          description: 'Connect to a remote server using a PRECONFIGURED preset from ~/.ssh-mcp.json, hosts.json, or SSH_MCP_HOSTS_CONFIG. This is the PRIMARY way to connect — presets already include host, username, and authentication (password or private key), so the user does NOT need to provide credentials again. When the user says "connect to X" or "SSH into X", X is the preset name — pass it directly as the "preset" parameter. If the preset does not exist, the server will return an error with available preset names. Any field can be overridden if needed.',
           inputSchema: {
             type: 'object',
             properties: {
-              preset: { type: 'string', description: 'Name of the preset to use' },
+              preset: { type: 'string', description: 'Name of the preset to use. When the user says "connect to my-server" or "SSH into the prod box", the preset name is exactly what they said (e.g., "my-server" or "prod")' },
               host: { type: 'string', description: 'Override the preset hostname or IP' },
               port: { type: 'number', description: 'Override the SSH port' },
               username: { type: 'string', description: 'Override the SSH username' },
